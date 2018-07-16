@@ -166,14 +166,14 @@ module.exports = (robot) ->
   robot.respond /list assigned roles/i, (msg) ->
     roles = []
     unless robot.auth.isAdmin msg.message.user
-        msg.reply "Sorry, only admins can list assigned roles."
+      msg.reply "Sorry, only admins can list assigned roles."
     else
-        for i, user of robot.brain.data.users when user.roles
-            roles.push role for role in user.roles when role not in roles
-        if roles.length > 0
-            msg.reply "The following roles are available: #{roles.join(', ')}"
-        else
-            msg.reply "No roles to list."
+      for i, user of robot.brain.data.users when user.roles
+        roles.push role for role in user.roles when role not in roles
+      if roles.length > 0
+        msg.reply "The following roles are available: #{roles.join(', ')}"
+      else
+        msg.reply "No roles to list."
 
   robot.respond /what(?:'s|s|\s+is)\s+my\s+name\s*(?:\?|)/i, (msg) ->
     user = robot.brain.userForId(msg.envelope.user['id'])
