@@ -92,6 +92,7 @@ module.exports = (robot) ->
             myRoles = msg.message.user.roles or []
             user.roles.push(newRole)
             msg.reply "OK, #{name} has the '#{newRole}' role."
+            robot.brain.save()
 
   robot.respond /@?(.+) (?:don['’]t|doesn['’]t|do not|does not) have (["'\w: -_]+) role/i, (msg) ->
     name = msg.match[1].trim()
