@@ -3,6 +3,7 @@
 #
 # Configuration:
 #   HUBOT_AUTH_ADMIN - A comma separate list of user IDs
+#   HUBOT_DEFINED_ROLES - comma separated list of roles
 #
 # Commands:
 #   hubot <user> has <role> role - Assigns a role to a user
@@ -24,9 +25,14 @@
 #   * The script assumes that user IDs will be unique on the service end as to
 #     correctly identify a user. Names were insecure as a user could impersonate
 #     a user
+#
+# Updates:
+#   * LCB 07/18 - adding predefined roles and adding persistent memory hooks on
+#     role updates (a role is given or removed)
 
 config =
   admin_list: process.env.HUBOT_AUTH_ADMIN
+  defined_roles: process.env.HUBOT_DEFINED_ROLES # LCB adding predefined roles
 
 module.exports = (robot) ->
 
@@ -37,6 +43,12 @@ module.exports = (robot) ->
     admins = config.admin_list.split ','
   else
     admins = []
+
+  # LCB changed to defined roles
+  if config.defined_roles?
+    definedRoles = config.defined_roles.split ','
+  else
+    definedRoles = []
 
   class Auth
     isAdmin: (user) ->
@@ -67,17 +79,21 @@ module.exports = (robot) ->
 
   robot.auth = new Auth
 
-
   robot.respond /@?(.+) ha(?:s|ve) (["'\w: -_]+) role/i, (msg) ->
     name = msg.match[1].trim()
     if name.toLowerCase() is 'i' then name = msg.message.user.name
     if name.match(/(.*)(?:don['’]t|doesn['’]t|do not|does not)/i) then return
 
+    # LCB changed to defined roles
+    newRole = msg.match[2].trim().toLowerCase()
+    unless newRole in definedRoles
+      msg.reply "Sorry, I don't know the '#{newRole}' role. I only know these roles: #{definedRoles}."
+      return
+
     unless name.toLowerCase() in ['', 'who', 'what', 'where', 'when', 'why']
       unless robot.auth.isAdmin msg.message.user
         msg.reply "Sorry, only admins can assign roles."
       else
-        newRole = msg.match[2].trim().toLowerCase()
 
         user = robot.brain.userForName(name)
         return msg.reply "#{name} does not exist" unless user?
@@ -92,17 +108,22 @@ module.exports = (robot) ->
             myRoles = msg.message.user.roles or []
             user.roles.push(newRole)
             msg.reply "OK, #{name} has the '#{newRole}' role."
+            robot.brain.save() # LCB - adding brain save hook on role change
 
   robot.respond /@?(.+) (?:don['’]t|doesn['’]t|do not|does not) have (["'\w: -_]+) role/i, (msg) ->
     name = msg.match[1].trim()
     if name.toLowerCase() is 'i' then name = msg.message.user.name
 
+    # LCB changed to defined roles
+    newRole = msg.match[2].trim().toLowerCase()
+    unless newRole in definedRoles
+      msg.reply "Sorry, I don't know the '#{newRole}' role. I only know these roles: #{definedRoles}."
+      return
+
     unless name.toLowerCase() in ['', 'who', 'what', 'where', 'when', 'why']
       unless robot.auth.isAdmin msg.message.user
         msg.reply "Sorry, only admins can remove roles."
       else
-        newRole = msg.match[2].trim().toLowerCase()
-
         user = robot.brain.userForName(name)
         return msg.reply "#{name} does not exist" unless user?
         user.roles or= []
@@ -113,6 +134,7 @@ module.exports = (robot) ->
           myRoles = msg.message.user.roles or []
           user.roles = (role for role in user.roles when role isnt newRole)
           msg.reply "OK, #{name} doesn't have the '#{newRole}' role."
+          robot.brain.save() # LCB - adding brain save hook on role change
 
   robot.respond /what roles? do(es)? @?(.+) have\?*$/i, (msg) ->
     name = msg.match[2].trim()
@@ -128,6 +150,12 @@ module.exports = (robot) ->
 
   robot.respond /who has (["'\w: -_]+) role\?*$/i, (msg) ->
     role = msg.match[1]
+
+    # LCB changed to defined roles
+    unless role in definedRoles
+      msg.reply "Sorry, I don't know the '#{role}' role. I only know these roles: #{definedRoles}."
+      return
+
     userNames = robot.auth.usersWithRole(role) if role?
 
     if userNames.length > 0
@@ -138,14 +166,14 @@ module.exports = (robot) ->
   robot.respond /list assigned roles/i, (msg) ->
     roles = []
     unless robot.auth.isAdmin msg.message.user
-        msg.reply "Sorry, only admins can list assigned roles."
+      msg.reply "Sorry, only admins can list assigned roles."
     else
-        for i, user of robot.brain.data.users when user.roles
-            roles.push role for role in user.roles when role not in roles
-        if roles.length > 0
-            msg.reply "The following roles are available: #{roles.join(', ')}"
-        else
-            msg.reply "No roles to list."
+      for i, user of robot.brain.data.users when user.roles
+        roles.push role for role in user.roles when role not in roles
+      if roles.length > 0
+        msg.reply "The following roles are available: #{roles.join(', ')}"
+      else
+        msg.reply "No roles to list."
 
   robot.respond /what(?:'s|s|\s+is)\s+my\s+name\s*(?:\?|)/i, (msg) ->
     user = robot.brain.userForId(msg.envelope.user['id'])
